@@ -1,0 +1,135 @@
+
+matching caesarean script
+-------------------------
+
+N.Green
+
+17/04/13
+
+
+
+```{r}
+## suppress warning message
+options(warn=-1)
+
+setwd("H:\\caesarean SSI LOS")
+
+survData <- read.table(".\\raw data\\data.txt")
+
+## read-in matching look-up table
+## and convert to list type
+matches <- as.data.frame( t(read.table(".\\processed data\\Match LOS Mar 13.txt",fill=TRUE)))
+colnames(matches) <- matches[1,]
+matches <- matches[-1,]
+matches <- as.list(matches)
+matches <- lapply(matches, function(x) x[!is.na(x)] )
+matches
+```
+
+
+```{r}
+## helper function
+## difference between each infected case and mean of matched samples
+meandiff <- function(matches, survData){
+# LOSar: time from admission to departure
+  
+  diff <- c(NULL, NULL)
+  for (serialno in names(matches)){
+    diff <- rbind(diff, c(serialno, survData$LOSar[survData$serialnumber==serialno]-
+                            mean(survData$LOSar[survData$serialnumber%in%matches[[serialno]]]))
+    )
+  }
+
+diff
+}
+
+## standard error
+## by jackknifing matching table (leave-one-out)
+matches.se <- function(matches, survData){
+  out <- NULL
+  for (i in 1:length(matches)){
+    for (j in 1:length(matches[[i]])){
+      matches.temp <- matches
+      matches.temp[[i]] <- matches.temp[[i]][-j]
+      out <- c(out, mean(as.numeric(meandiff(matches.temp, survData)[,2]), na.rm=TRUE))
+    }
+  }
+  sqrt(var(out))
+}
+
+```
+
+
+# individual difference
+
+```{r}
+meandiff(matches, survData)
+```
+
+# overall expected excess LOS
+
+```{r}
+mean(as.numeric(meandiff(matches, survData)[,2]))
+suppressWarnings(matches.se(matches, survData))
+```
+
+
+
+# include matching by overall length of stay prior to infection
+
+LOSar>=LOSpreop+days2inf
+update matching look-up table
+
+```{r}
+matches.ar <- matches
+
+for (serialno in names(matches)){
+	matches.ar[[serialno]] <- matches.ar[[serialno]][survData$LOSar[survData$serialnumber%in%matches.ar[[serialno]]] >=
+					 	(survData$LOSpreop[survData$serialnumber==serialno]+
+						 survData$days2inf[survData$serialnumber==serialno]) ]
+}
+matches.ar
+```
+
+
+# individual difference
+
+```{r}
+meandiff(matches.ar, survData)
+```
+
+# overall expected excess LOS inclding LOSar
+
+```{r}
+mean(as.numeric(meandiff(matches.ar, survData)[,2]), na.rm=TRUE)
+suppressWarnings(matches.se(matches.ar, survData))
+```
+
+
+
+# include matching by postop length of stay prior to infection
+
+LOSop>=days2inf
+update matching look-up table
+
+```{r}
+matches.ar <- matches
+for (serialno in names(matches)){
+  matches.ar[[serialno]] <- matches.ar[[serialno]][survData$LOSop[survData$serialnumber%in%matches.ar[[serialno]]] >=
+                                                   survData$days2inf[survData$serialnumber==serialno] ]
+}
+matches.ar
+```
+
+# individual difference
+
+```{r}
+meandiff(matches.ar, survData)
+```
+
+# overall expected excess LOS inclding LOSar
+
+```{r}
+mean(as.numeric(meandiff(matches.ar, survData)[,2]), na.rm=TRUE)
+suppressWarnings(matches.se(matches.ar, survData))
+```
